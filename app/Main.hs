@@ -2,6 +2,7 @@
 module Main where
 
 import Data.List (intercalate,sort)
+import Data.Ord (comparing)
 import Data.String.Utils (strip)
 import GHC.Unicode (isSpace)
 import Text.ParserCombinators.ReadP
@@ -9,21 +10,16 @@ import Text.ParserCombinators.ReadP
 main :: IO ()
 main = getContents >>= print . parse
 
+-- TODO use a sorted collection type instead of []
 data Dependencies = Dependencies String [String]
 
 instance Eq Dependencies where
   (Dependencies t1 d1) == (Dependencies t2 d2) = t1 == t2 && d1 == d2 -- assumption: d1 and d2 are already sorted
 
--- TODO there are better ways to chain comparisons
 instance Ord Dependencies where
-  compare (Dependencies t1 d1) (Dependencies t2 d2) =
-    if t1 /= t2
-    then compare t1 t2
-    else let l1 = length d1
-             l2 = length d2
-         in if l1 /= l2
-            then compare l1 l2
-            else compare d1 d2  -- assumption: d1 and d2 are already sorted
+  compare (Dependencies t1 d1) (Dependencies t2 d2) = compare t1 t2
+                                            `mappend` comparing length d1 d2
+                                            `mappend` compare d1 d2   -- assumption: d1 and d2 are already sorted
 
 instance Show Dependencies where
   show (Dependencies tbl deps) = tbl ++ "\n" ++ intercalate "\n" (("  "++) <$> deps)
