@@ -1,0 +1,17 @@
+
+drop table if exists tmp_1;
+create temp table tmp_1  as
+    select day, t1.m,
+    t1.o_no,
+    t2.s_no,
+    t1.num as foot,
+    (CASE
+        WHEN t3.should_do_it = 't' and (t3.start <= day AND (t3.end > day OR t3.end is null) OR t3.start is null) THEN 't'
+    END) AS im
+    from tmp_day, world t1
+    left join os t2  using (o_no)
+    left join hs t3 on t1.m = t3.m and t1.o_no = t3.o_no
+    where t1.version_no is null and t1.start <= day AND (t1.end > day OR t1.end is NULL)
+distributed randomly;
+
+
