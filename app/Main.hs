@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Data.List (intercalate,sort)
+import Data.Char (toLower)
+import Data.List (intercalate,nub,sort)
 import Data.Ord (comparing)
 import Data.String.Utils (strip)
 import GHC.Unicode (isSpace)
@@ -22,11 +23,11 @@ instance Ord Dependencies where
                                             `mappend` compare d1 d2   -- assumption: d1 and d2 are already sorted
 
 instance Show Dependencies where
-  show (Dependencies tbl deps) = tbl ++ "\n" ++ intercalate "\n" (("  "++) <$> deps)
+  show (Dependencies tbl deps) = intercalate "\n" (("    " ++ tbl) : (("      "++) <$> deps))
 
--- TODO maximumBy is partial: error if deps is empty
+-- TODO maximum is partial: error if deps is empty
 parse :: String -> Dependencies
-parse s = let deps = readP_to_S (singleBlock >>= \d -> eof >> return d) (strip s)
+parse s = let deps = (readP_to_S (singleBlock >>= \d -> eof >> return d) . strip . fmap toLower) s
           in (fst . maximum) deps
 
 singleBlock :: ReadP Dependencies
@@ -89,7 +90,7 @@ createStmt = do
   string "from"
   skipSpaces1
   fTables <- fromTables
-  return (tName,sort fTables)
+  return (tName,(sort . nub) fTables)
 
 fromTables :: ReadP [String]
 fromTables = sepBy fromTable ((skipSpaces >> join       >> skipSpaces) <++
@@ -104,7 +105,7 @@ fromTable = do
 
 join :: ReadP Char
 join = do
-  optional (string "left" <++ string "right" <++ string "inner" <++ string "outer")
+  optional (string "left" <++ string "right" <++ string "cross" <++ string "inner" <++ string "outer")
   skipSpaces1
   string "join"
   satisfy isSpace
