@@ -4,12 +4,16 @@ module Main where
 import Data.Char (toLower)
 import Data.List (intercalate,nub,sort)
 import Data.Ord (comparing)
-import Data.String.Utils (strip)
+import Data.String.Utils (replace,strip)
 import GHC.Unicode (isSpace)
+import System.Environment (getArgs)
 import Text.ParserCombinators.ReadP
 
 main :: IO ()
-main = getContents >>= print . parse
+main = getArgs >>= \args -> case args of
+  []        -> getContents >>= print . parseSqlBlock
+  ["--gv"]  -> getContents >>= putStr . genGraphViz
+  otherwise -> error "Illegal argument(s)."
 
 -- TODO use a sorted collection type instead of []
 data Dependencies = Dependencies String [String]
@@ -23,12 +27,39 @@ instance Ord Dependencies where
                                             `mappend` compare d1 d2   -- assumption: d1 and d2 are already sorted
 
 instance Show Dependencies where
-  show (Dependencies tbl deps) = intercalate "\n" (("    " ++ tbl) : (("      "++) <$> deps))
+  show (Dependencies tbl deps) = intercalate "\n" (tbl : (("  "++) <$> deps))
 
+--------
+genGraphViz :: String -> String
+genGraphViz = intercalate "\n" . fmap genGraphVizFromDep . buildDeps
+
+buildDeps :: String -> [Dependencies]
+buildDeps s = case (readP_to_S dependencies . fmap toLower) s of
+  [(deps, "")] -> deps
+  otherwise    -> error "Failed to parse."
+
+genGraphVizFromDep :: Dependencies -> String
+genGraphVizFromDep (Dependencies tName fTables) =
+  (intercalate "\n" . fmap (\fTable -> "  " ++ fTable ++ " -> " ++ tName)) fTables
+
+dependencies :: ReadP [Dependencies]
+dependencies = do
+  skipSpaces
+  deps <- sepBy dependency (string "\n\n")
+  skipSpaces
+  eof
+  return deps
+
+dependency :: ReadP Dependencies
+dependency = do
+  (tName:fTables) <- sepBy1 tableName (string "\n  ")
+  return (Dependencies tName fTables)
+
+--------
 -- TODO maximum is partial: error if deps is empty
-parse :: String -> Dependencies
-parse s = let deps = (readP_to_S (singleBlock >>= \d -> eof >> return d) . strip . fmap toLower) s
-          in (fst . maximum) deps
+parseSqlBlock :: String -> Dependencies
+parseSqlBlock s = let deps = (readP_to_S (singleBlock >>= \d -> eof >> return d) . strip . fmap toLower) s
+  in (fst . maximum) deps
 
 singleBlock :: ReadP Dependencies
 singleBlock = do
@@ -60,9 +91,9 @@ skipSpaces1 = satisfy isSpace >> skipSpaces
 
 tableName :: ReadP String
 tableName = do
-  p <- option "" (string "${prefix}")
-  n <- munch1 isTableNameChar
-  return (p ++ n)
+  optional (string "${prefix}")
+  tName <- munch1 isTableNameChar
+  (return . replace "." "__") tName
 
 isTableNameChar :: Char -> Bool
 isTableNameChar c =
