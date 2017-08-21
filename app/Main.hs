@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Data.List (intercalate,nub)
+import Data.List (intercalate,sort)
 import Data.String.Utils (strip)
 import GHC.Unicode (isSpace)
 import Text.ParserCombinators.ReadP
@@ -10,16 +10,28 @@ main :: IO ()
 main = getContents >>= print . parse
 
 data Dependencies = Dependencies String [String]
-  deriving (Eq,Ord)
+
+instance Eq Dependencies where
+  (Dependencies t1 d1) == (Dependencies t2 d2) = t1 == t2 && d1 == d2 -- assumption: d1 and d2 are already sorted
+
+-- TODO there are better ways to chain comparisons
+instance Ord Dependencies where
+  compare (Dependencies t1 d1) (Dependencies t2 d2) =
+    if t1 /= t2
+    then compare t1 t2
+    else let l1 = length d1
+             l2 = length d2
+         in if l1 /= l2
+            then compare l1 l2
+            else compare d1 d2  -- assumption: d1 and d2 are already sorted
 
 instance Show Dependencies where
   show (Dependencies tbl deps) = tbl ++ "\n" ++ intercalate "\n" (("  "++) <$> deps)
 
--- TODO maximum is partial: error if distinctDeps is empty
+-- TODO maximumBy is partial: error if deps is empty
 parse :: String -> Dependencies
 parse s = let deps = readP_to_S (singleBlock >>= \d -> eof >> return d) (strip s)
-              distinctDeps = nub deps
-          in (fst . maximum) distinctDeps
+          in (fst . maximum) deps
 
 singleBlock :: ReadP Dependencies
 singleBlock = do
@@ -81,7 +93,7 @@ createStmt = do
   string "from"
   skipSpaces1
   fTables <- fromTables
-  return (tName,fTables)
+  return (tName,sort fTables)
 
 fromTables :: ReadP [String]
 fromTables = sepBy fromTable ((skipSpaces >> join       >> skipSpaces) <++
